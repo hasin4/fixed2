@@ -1,0 +1,1005 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Matsonnet Studio — AI Workspace for Molecular Dynamics</title>
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght=400;500;600;700&amp;family=JetBrains+Mono:wght=400;500&amp;display=swap" rel="stylesheet"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<style>
+  :root {
+    --bg-base: #03140f; 
+    --bg-surface-glass: rgba(6, 28, 22, 0.65);
+    --bg-surface-elevated: rgba(12, 48, 38, 0.85);
+    
+    --brand-primary: #10b981; 
+    --brand-secondary: #00ffcc; 
+    --accent-success: #adff2f;
+    --accent-warning: #f59e0b;
+    --accent-danger: #ef4444;
+    
+    --text-primary: #f0fdf4;
+    --text-secondary: #a7f3d0;
+    --text-muted: #65a30d;
+    
+    --border-subtle: rgba(16, 185, 129, 0.15);
+    --border-muted: rgba(16, 185, 129, 0.3);
+    --border-active: rgba(0, 255, 204, 0.6);
+    
+    --font-sans: 'Plus Jakarta Sans', system-ui, sans-serif;
+    --font-mono: 'JetBrains Mono', monospace;
+    --transition-smooth: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  html, body { 
+    height: 100%; 
+    overflow: hidden; 
+    background-color: var(--bg-base);
+    color: var(--text-primary);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  #ambientSimulationContainer {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    z-index: 1;
+    pointer-events: auto;
+  }
+
+  nav {
+    position: fixed; top: 0; left: 0; width: 100%; height: 70px;
+    z-index: 100; display: flex; align-items: center; justify-content: space-between;
+    padding: 0 24px;
+    backdrop-filter: blur(24px);
+    -webkit-backdrop-filter: blur(24px);
+    background: rgba(3, 20, 15, 0.6);
+    border-bottom: 1px solid var(--border-muted);
+  }
+  .logo {
+    font-weight: 700; font-size: 1.1rem;
+    letter-spacing: -0.01em; display: flex; align-items: center; gap: 12px;
+  }
+  .logo-icon {
+    width: 8px; height: 8px; border-radius: 2px;
+    background: var(--brand-secondary); transform: rotate(45deg);
+    box-shadow: 0 0 12px var(--brand-secondary);
+  }
+  .nav-links { display: flex; gap: 18px; font-size: 0.8rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
+  .nav-links a { color: var(--text-secondary); text-decoration: none; transition: var(--transition-smooth); padding: 6px 10px; border-radius: 4px; }
+  .nav-links a:hover { color: var(--text-primary); background: rgba(16, 185, 129, 0.15); text-shadow: 0 0 10px rgba(0,255,204,0.4); }
+  
+  @media (max-width: 1150px) { .nav-links { display: none; } }
+
+  #scrollContainer {
+    position: relative;
+    z-index: 5;
+    display: flex;
+    flex-direction: row;
+    height: 100vh;
+    width: 100vw;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scroll-snap-type: x mandatory;
+    scroll-behavior: smooth;
+    pointer-events: none;
+  }
+  #scrollContainer::-webkit-scrollbar { height: 4px; }
+  #scrollContainer::-webkit-scrollbar-thumb { background: var(--border-muted); }
+
+  .panel {
+    min-width: 100vw;
+    height: 100vh;
+    flex-shrink: 0;
+    scroll-snap-align: start;
+    overflow-y: auto;
+    padding: 100px 6vw 64px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    pointer-events: auto;
+  }
+
+  /* Fix layout and scrolling cutoff for content-heavy merged panels */
+  #panel-pipeline,
+  #panel-game {
+    justify-content: flex-start;
+  }
+  
+  .panel-inner { 
+    max-width: 1100px; margin: 0 auto; width: 100%; 
+    background: var(--bg-surface-glass);
+    padding: 35px;
+    border-radius: 16px;
+    border: 1px solid var(--border-subtle);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    box-shadow: 0 30px 60px rgba(0,0,0,0.4);
+  }
+
+  .panel-eyebrow {
+    font-family: var(--font-mono); font-size: 0.75rem; color: var(--brand-secondary);
+    letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 12px; display: block;
+  }
+  .panel-title {
+    font-weight: 700; font-size: clamp(1.8rem, 3.5vw, 2.4rem); 
+    letter-spacing: -0.02em; margin-bottom: 12px; color: var(--text-primary);
+  }
+  .panel-desc { color: var(--text-secondary); font-size: 0.95rem; max-width: 650px; margin-bottom: 24px; line-height: 1.5; }
+
+  /* ENGINE BLOCK LAYOUTS */
+  .engine-dashboard { display: grid; grid-template-columns: 1fr 2fr; gap: 24px; margin-top: 10px; }
+  @media (max-width: 900px) { .engine-dashboard { grid-template-columns: 1fr; } }
+  .engine-telemetry-panel { background: rgba(2, 13, 10, 0.8); border: 1px solid var(--border-muted); border-radius: 8px; padding: 20px; font-family: var(--font-mono); }
+  .metric-readout { font-size: 1.5rem; font-weight: bold; color: var(--brand-secondary); text-shadow: 0 0 10px rgba(0,255,204,0.3); margin-bottom: 4px; }
+  .metric-label { font-size: 0.7rem; color: var(--text-secondary); text-transform: uppercase; margin-bottom: 16px; }
+
+  #chain3dCanvasHolder { width: 100%; height: 350px; border-radius: 12px; overflow: hidden; background: #020d0a; border: 2px solid var(--border-muted); position: relative; cursor: pointer; }
+  
+  /* 3D GAME HOLDER STYLING */
+  #game3dContainer { width: 100%; height: 360px; border-radius: 12px; overflow: hidden; background: #010806; border: 2px solid var(--border-muted); position: relative; cursor: crosshair; }
+  .game-ui-overlay { position: absolute; top: 15px; left: 15px; font-family: var(--font-mono); font-size: 0.75rem; background: rgba(3, 20, 15, 0.8); border: 1px solid var(--border-subtle); padding: 8px 12px; border-radius: 6px; pointer-events: none; display: flex; flex-direction: column; gap: 4px; }
+
+  .under-build-box { background: rgba(245, 158, 11, 0.1); border: 1px solid var(--accent-warning); border-radius: 8px; padding: 24px; text-align: center; margin: 20px 0; }
+  .under-build-box h4 { color: var(--accent-warning); margin-bottom: 8px; font-family: var(--font-mono); }
+
+  .btn { font-family: var(--font-sans); font-weight: 600; font-size: 0.85rem; padding: 12px 24px; border-radius: 6px; cursor: pointer; border: none; transition: var(--transition-smooth); }
+  .btn-primary { background: var(--brand-primary); color: #03140f; }
+  .btn-primary:hover { background: var(--brand-secondary); transform: translateY(-1px); box-shadow: 0 4px 20px rgba(0,255,204,0.3); }
+  .btn-ghost { background: rgba(255,255,255,0.03); color: var(--text-primary); border: 1px solid var(--border-muted); }
+  .btn-ghost:hover { background: rgba(16, 185, 129, 0.1); border-color: var(--brand-secondary); }
+
+  .tools-grid, .steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+  @media (max-width: 900px) { .tools-grid, .steps { grid-template-columns: 1fr; } }
+
+  .tool-card, .step-card { background: rgba(12, 48, 38, 0.3); border: 1px solid var(--border-subtle); padding: 20px; border-radius: 8px; }
+  .layout-split { display: grid; grid-template-columns: 1fr 1fr; gap: 30px; align-items: start; }
+  @media (max-width: 900px) { .layout-split { grid-template-columns: 1fr; } }
+
+  #vizCanvasHolder { width: 100%; height: 300px; border-radius: 8px; overflow: hidden; background: #020d0a; border: 1px solid var(--border-muted); }
+</style>
+</head>
+<body>
+
+<div id="ambientSimulationContainer"></div>
+
+<nav>
+<div class="logo"><span class="logo-icon"></span>Matsonnet Studio</div>
+<div class="nav-links">
+  <a href="#panel-hero">Home</a>
+  <a href="#panel-pipeline">Pipeline</a>
+  <a href="#panel-engine">Engine</a>
+  <a href="#panel-visualizer">Visualizer</a>
+  <a href="#panel-game">Game</a>
+  <a href="#panel-about">About</a>
+  <a href="#panel-contact">Contact</a>
+</div>
+</nav>
+
+<div id="scrollContainer">
+  <!-- SECTION 1: HOME -->
+  <section class="panel" id="panel-hero">
+    <div class="panel-inner">
+      <span class="panel-eyebrow">System Framework v2.6</span>
+      <h1 class="panel-title" style="font-size: clamp(2.2rem, 5vw, 3.5rem); line-height:1.1;">AI Workspace for Molecular Dynamics</h1>
+      <p class="panel-desc">An AI research workspace built entirely around OpenMM. Describe a molecular system in plain language, and get a real simulation, trajectory, and analysis back.</p>
+      <button class="btn btn-primary" onclick="document.getElementById('panel-engine').scrollIntoView({behavior: 'smooth'})">Launch ENGINE</button>
+    </div>
+  </section>
+
+  <!-- SECTION 2: PIPELINE + TOOLS (merged) -->
+  <section class="panel" id="panel-pipeline">
+    <div class="panel-inner">
+      <span class="panel-eyebrow">Execution Steps</span>
+      <h2 class="panel-title">Physical Solvers Framework</h2>
+      <div class="steps">
+        <div class="step-card"><h3>01 / Planning</h3><p class="panel-desc" style="margin:10px 0 0;">Evaluates operational boundary limits and criteria arrays.</p></div>
+        <div class="step-card"><h3>02 / Processing</h3><p class="panel-desc" style="margin:10px 0 0;">Solves matrix configurations over localized OpenMM loops.</p></div>
+        <div class="step-card"><h3>03 / Diagnostics</h3><p class="panel-desc" style="margin:10px 0 0;">Extracts spatial coordinate histories and system MSD graphs.</p></div>
+      </div>
+
+      <div style="margin-top: 40px; border-top: 1px solid var(--border-muted); padding-top: 30px;">
+        <span class="panel-eyebrow">Utilities</span>
+        <h2 class="panel-title">Production Modules</h2>
+        <div class="tools-grid">
+          <div class="tool-card"><h4>🧠 MD-AI Assistant</h4><p style="font-size:0.85rem; color:var(--text-secondary);">Explains OpenMM concepts — force fields, integrators, ensembles, thermostats.</p></div>
+          <div class="tool-card"><h4>📝 OpenMM Script Generator</h4><p style="font-size:0.85rem; color:var(--text-secondary);">Describe a system in plain language, get a working OpenMM Python script back.</p></div>
+          <div class="tool-card"><h4>📊 Trajectory Analyzer</h4><p style="font-size:0.85rem; color:var(--text-secondary);">Turns raw OpenMM trajectories into RDF, MSD, and energy plots — explained in plain language.</p></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- SECTION 4: ENGINE -->
+  <section class="panel" id="panel-engine">
+    <div class="panel-inner">
+      <span class="panel-eyebrow">Live Physics</span>
+      <h2 class="panel-title">Run a real OpenMM simulation</h2>
+      <p class="panel-desc">Set parameters below and hit run — this sends a request to a live backend that actually executes OpenMM, then loads the result straight into the Visualizer panel.</p>
+
+      <div class="engine-dashboard">
+        <div class="engine-telemetry-panel">
+          <label style="display:block; font-size:0.75rem; color:var(--text-secondary); margin-bottom:6px;">Simulation Type</label>
+          <select id="engineSimType" style="width:100%; background:#041a14; border:1px solid var(--border-muted); color:#fff; padding:8px; border-radius:6px; font-family:var(--font-mono); margin-bottom:6px;">
+            <option value="noble_gas">🟢 Noble Gas Fluid (argon-like)</option>
+            <option value="diatomic_gas">🔗 Diatomic Molecular Gas (N2-like)</option>
+            <option value="polymer_chain">🧵 Polymer Chain (folding beads)</option>
+            <option value="crystal_solid">🧊 Crystal Solid (fixed lattice)</option>
+          </select>
+          <div id="engineSimDesc" style="font-size:0.72rem; color:var(--text-muted); margin-bottom:16px; line-height:1.4;">Free-diffusing monoatomic fluid — like argon gas or liquid.</div>
+
+          <label style="display:block; font-size:0.75rem; color:var(--text-secondary); margin-bottom:6px;">Temperature (K)</label>
+          <input type="range" id="engineTemp" min="50" max="800" value="300" style="width:100%; accent-color:var(--brand-primary); margin-bottom:16px;">
+          <div class="metric-readout" id="engineTempVal">300 K</div>
+          <div class="metric-label">Target Temperature</div>
+
+          <label style="display:block; font-size:0.75rem; color:var(--text-secondary); margin:12px 0 6px;">Particles</label>
+          <select id="engineParticles" style="width:100%; background:#041a14; border:1px solid var(--border-muted); color:#fff; padding:8px; border-radius:6px; font-family:var(--font-mono);">
+            <option value="27">27 (fast)</option>
+            <option value="64" selected>64 (balanced)</option>
+            <option value="125">125 (detailed)</option>
+          </select>
+
+          <label style="display:block; font-size:0.75rem; color:var(--text-secondary); margin:12px 0 6px;">Steps</label>
+          <select id="engineSteps" style="width:100%; background:#041a14; border:1px solid var(--border-muted); color:#fff; padding:8px; border-radius:6px; font-family:var(--font-mono);">
+            <option value="500">500 (quick)</option>
+            <option value="1500" selected>1500 (standard)</option>
+            <option value="4000">4000 (longer run)</option>
+          </select>
+
+          <button class="btn btn-primary" id="engineRunBtn" style="width:100%; margin-top:18px;">Run Real Simulation</button>
+        </div>
+
+        <div>
+          <div style="background:#020d0a; border:1px solid var(--border-muted); border-radius:8px; padding:20px; font-family:var(--font-mono); font-size:0.85rem; height:220px; overflow-y:auto; margin-bottom:15px;" id="engineConsole">
+            <span style="color:var(--brand-secondary)">[matsonnet_engine]</span> Ready. Set parameters and click "Run Real Simulation" to execute a genuine OpenMM run.
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- SECTION 5: VISUALIZER -->
+  <section class="panel" id="panel-visualizer">
+    <div class="panel-inner">
+      <span class="panel-eyebrow">Real simulation data</span>
+      <h2 class="panel-title">OpenMM Trajectory Visualizer</h2>
+      <span style="display:inline-block; font-family:var(--font-mono); font-size:0.68rem; color:var(--accent-success); border:1px solid rgba(173,255,47,0.3); padding:4px 10px; border-radius:999px; background:rgba(173,255,47,0.06); margin-bottom:16px;">⚛ Powered by an actual OpenMM run — not decorative</span>
+      <div class="layout-split">
+        <div id="vizCanvasHolder"></div>
+        <div>
+          <div style="display:flex; gap:10px; margin-bottom:14px;">
+            <button class="btn btn-ghost" id="vizPlayPause">Pause Stream</button>
+            <button class="btn btn-ghost" id="vizResetView">Reset View</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- SECTION 6: ATOMIC 3D GAME + CHAIN REACTION (merged) -->
+  <section class="panel" id="panel-game">
+    <div class="panel-inner">
+      <span class="panel-eyebrow">Interactive Space-Time Sandbox</span>
+      <h2 class="panel-title">3D Atomic Chain Reaction Simulation Game</h2>
+      <p class="panel-desc">Click directly on any grey atomic particle within this true 3D spatial matrix node layer to launch a multi-directional shockwave event! Detonate unstable interstitial elements before they collapse.</p>
+      <div class="layout-split">
+        <div id="game3dContainer">
+          <div class="game-ui-overlay">
+            <div>Score: <span id="game3dScore" style="color:var(--brand-secondary); font-weight:bold;">0</span></div>
+            <div>Chain Multiplier: <span id="game3dMult" style="color:var(--accent-success);">1.0x</span></div>
+            <div>Lattice Status: <span id="game3dState" style="color:var(--accent-warning);">Stable Lattice</span></div>
+          </div>
+        </div>
+        <div>
+          <div class="game-score-card" style="margin-bottom: 15px;">
+            <p style="font-weight: 600; color: var(--text-primary); margin-bottom: 6px;">🎮 3D Matrix Controls & Mechanics:</p>
+            <p style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 4px;">• <strong>Trigger:</strong> Click any structural node directly to induce dynamic thermal stress fields.</p>
+            <p style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 4px;">• <strong>Chain Propagation:</strong> Expanding kinetic energy rings will autonomously detonate adjacent atoms.</p>
+            <p style="font-size: 0.85rem; color: var(--text-secondary);">• <strong>Bonus Target:</strong> Unstable interstitial atoms periodically manifest in red. Fast capture yields higher score matrices!</p>
+          </div>
+          <div style="display:flex; gap:10px;">
+            <button class="btn btn-primary" id="reset3dGameBtn">Reset 3D Lattice Grid</button>
+            <button class="btn btn-ghost" id="spawnUnstableBtn">+ Force Interstitial Node</button>
+          </div>
+        </div>
+      </div>
+
+      <div style="margin-top: 40px; border-top: 1px solid var(--border-muted); padding-top: 30px;">
+        <span class="panel-eyebrow">Lattice Deformations</span>
+        <h2 class="panel-title">3D Kinetic Chain Propagation Visualizer</h2>
+        <p class="panel-desc">Click directly inside the crystal lattice volume below to instantly activate an exothermic atomic cascade running across geometric spatial limits.</p>
+        <div class="layout-split">
+          <div id="chain3dCanvasHolder"></div>
+          <div>
+            <button class="btn btn-primary" id="triggerChain3dBtn">Inject Thermal Dislocation</button>
+            <div class="game-score-card" style="margin-top: 20px;">
+              <p style="color:var(--brand-secondary); font-weight:bold;">Kinetic Trajectory Status:</p>
+              <p id="chain3dStatus" style="font-size:0.85rem; margin-top:5px; color:var(--text-secondary);">Lattice structural field relaxed.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- SECTION 7: ABOUT -->
+  <section class="panel" id="panel-about">
+    <div class="panel-inner">
+      <span class="panel-eyebrow">Project Background</span>
+      <h2 class="panel-title">About Matsonnet Studio</h2>
+      <p class="panel-desc" style="max-width: 750px;">Matsonnet Studio is an AI research workspace built entirely around OpenMM, designed to make real molecular dynamics accessible through plain-language interaction — describe a system, and get an actual simulation, trajectory, and analysis back rather than a canned demo.</p>
+      <p class="panel-desc" style="max-width: 750px;">The project pairs a live OpenMM backend with an interactive front end: the Engine panel runs genuine physics on request, the Visualizer replays the resulting trajectory frame by frame, and the surrounding tools explain the underlying concepts as you go.</p>
+      <div style="margin-top: 24px; padding: 20px; background: rgba(12, 48, 38, 0.4); border: 1px solid var(--border-subtle); border-radius: 8px;">
+        <p style="font-family: var(--font-mono); font-size: 0.85rem; color: var(--text-muted);">Built by Mahmud Hasin Azwad · Dhaka, Bangladesh</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- SECTION 8: CONTACT -->
+  <section class="panel" id="panel-contact">
+    <div class="panel-inner">
+      <span class="panel-eyebrow">Registry Channels</span>
+      <h2 class="panel-title">Contact &amp; Integration Inquiries</h2>
+      <p class="panel-desc">Interested in joining the project or testing academic deployment models? Reach out directly via the registry details below.</p>
+      
+      <div style="background: rgba(12, 48, 38, 0.5); border: 1px solid var(--border-muted); padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+        <p style="color: var(--brand-secondary); font-weight: bold; margin-bottom: 8px;">📬 JOIN OUR RESEARCH INITIATIVE</p>
+        <p style="font-size: 0.9rem; color: var(--text-secondary);">Any interested person can easily mail or call via phone to participate in active development branches!</p>
+      </div>
+
+      <div class="layout-split">
+        <div style="background:rgba(0,0,0,0.2); padding:16px; border-radius:8px; border:1px solid var(--border-subtle);">
+          <span style="font-size:0.75rem; text-transform:uppercase; color:var(--text-muted);">DEVELOPED BY</span>
+          <p style="font-size:1.05rem; font-weight:600; margin-top:4px;">Mahmud Hasin Azwad</p>
+          <p style="font-size:0.85rem; color:var(--brand-secondary); margin-top:2px;">mahmudhasin4@gmail.com | +880 1973551947</p>
+        </div>
+        <div style="background:rgba(0,0,0,0.2); padding:16px; border-radius:8px; border:1px solid var(--border-subtle);">
+          <span style="font-size:0.75rem; text-transform:uppercase; color:var(--text-muted);">Lab Base</span>
+          <p style="font-size:0.9rem; margin-top:4px; color:var(--text-secondary);">141 &amp; 142, Love Road, Tejgaon Industrial Area, Dhaka, Bangladesh</p>
+        </div>
+      </div>
+      <footer style="margin-top:30px; font-family:var(--font-mono); font-size:0.7rem; color:var(--text-muted);">© 2026 Matsonnet Studio // Engineered in Bangladesh 🇧🇩</footer>
+    </div>
+  </section>
+</div>
+
+<script>
+// Trajectory Simulation Payload Placeholder
+const MATSONNET_TRAJECTORY = {"box_size_nm":5.0,"n_particles":32,"n_frames":30,"frames":[]};
+
+// SCROLL NAVIGATION SYNC ENGINE
+const container = document.getElementById('scrollContainer');
+document.querySelectorAll('.nav-links a').forEach(anchor => {
+  anchor.addEventListener('click', e => {
+    e.preventDefault();
+    const target = document.querySelector(anchor.getAttribute('href'));
+    if(target) container.scrollTo({ left: target.offsetLeft, behavior: 'smooth' });
+  });
+});
+
+container.addEventListener('wheel', (ev) => {
+  if (Math.abs(ev.deltaY) > Math.abs(ev.deltaX)) {
+    ev.preventDefault();
+    container.scrollLeft += ev.deltaY;
+  }
+}, { passive: false });
+
+// BACKGROUND 3D ANIMATION ENGINE
+(function() {
+  const bgContainer = document.getElementById('ambientSimulationContainer');
+
+  const scene = new THREE.Scene();
+  const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+  const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  bgContainer.appendChild(renderer.domElement);
+
+  const particleCount = 80;
+  const positions = new Float32Array(particleCount * 3);
+  const velocities = [];
+
+  for (let i = 0; i < particleCount * 3; i += 3) {
+    positions[i] = (Math.random() - 0.5) * 35;
+    positions[i+1] = (Math.random() - 0.5) * 20;
+    positions[i+2] = (Math.random() - 0.5) * 20;
+
+    velocities.push({
+      x: (Math.random() - 0.5) * 0.05,
+      y: (Math.random() - 0.5) * 0.05,
+      z: (Math.random() - 0.5) * 0.05
+    });
+  }
+
+  const spheresGroup = new THREE.Group();
+  const sphereMat = new THREE.MeshBasicMaterial({ color: 0x10b981, transparent: true, opacity: 0.45 });
+  const sphereGeo = new THREE.SphereGeometry(0.12, 8, 8);
+
+  for (let i = 0; i < particleCount; i++) {
+    const mesh = new THREE.Mesh(sphereGeo, sphereMat);
+    mesh.position.set(positions[i*3], positions[i*3+1], positions[i*3+2]);
+    spheresGroup.add(mesh);
+  }
+  scene.add(spheresGroup);
+
+  let showLines = true;
+  const lineMaterial = new THREE.LineBasicMaterial({ color: 0x00ffcc, transparent: true, opacity: 0.12 });
+  let activeLinesMesh = null;
+
+  camera.position.z = 18;
+  let velocityModifier = 1.0;
+
+  window.addEventListener('resize', () => {
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+  });
+
+  function renderAmbientBackground() {
+    requestAnimationFrame(renderAmbientBackground);
+
+    for (let i = 0; i < particleCount; i++) {
+      const mesh = spheresGroup.children[i];
+      mesh.position.x += velocities[i].x * velocityModifier;
+      mesh.position.y += velocities[i].y * velocityModifier;
+      mesh.position.z += velocities[i].z * velocityModifier;
+
+      if (Math.abs(mesh.position.x) > 22) velocities[i].x *= -1;
+      if (Math.abs(mesh.position.y) > 14) velocities[i].y *= -1;
+      if (Math.abs(mesh.position.z) > 14) velocities[i].z *= -1;
+    }
+
+    if (activeLinesMesh) scene.remove(activeLinesMesh);
+
+    if (showLines) {
+      const linePositions = [];
+      for (let i = 0; i < particleCount; i++) {
+        for (let j = i + 1; j < particleCount; j++) {
+          const p1 = spheresGroup.children[i].position;
+          const p2 = spheresGroup.children[j].position;
+          const dist = p1.distanceTo(p2);
+
+          if (dist < 4.5) {
+            linePositions.push(p1.x, p1.y, p1.z);
+            linePositions.push(p2.x, p2.y, p2.z);
+          }
+        }
+      }
+
+      const lineGeo = new THREE.BufferGeometry();
+      lineGeo.setAttribute('position', new THREE.Float32BufferAttribute(linePositions, 3));
+      activeLinesMesh = new THREE.LineSegments(lineGeo, lineMaterial);
+      scene.add(activeLinesMesh);
+    }
+
+    scene.rotation.y += 0.0004;
+    scene.rotation.x += 0.0002;
+    renderer.render(scene, camera);
+  }
+  renderAmbientBackground();
+})();
+
+// ---------- MATSONNET VISUALIZER ----------
+const MatsonnetVisualizer = (function() {
+  const holder = document.getElementById('vizCanvasHolder');
+  const playPauseBtn = document.getElementById('vizPlayPause');
+  const resetViewBtn = document.getElementById('vizResetView');
+
+  const scene = new THREE.Scene();
+  const camera = new THREE.PerspectiveCamera(45, holder.clientWidth / holder.clientHeight, 0.1, 100);
+  const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+  renderer.setSize(holder.clientWidth, holder.clientHeight);
+  holder.appendChild(renderer.domElement);
+
+  scene.add(new THREE.AmbientLight(0xffffff, 0.5));
+  const dirLight = new THREE.DirectionalLight(0x00ffcc, 0.7);
+  dirLight.position.set(5, 8, 6);
+  scene.add(dirLight);
+
+  const particleGroup = new THREE.Group();
+  scene.add(particleGroup);
+
+  let boxHelper = null;
+  const sphereGeo = new THREE.SphereGeometry(0.08, 16, 16);
+  const particleMat = new THREE.MeshStandardMaterial({ color: 0x00ffcc, roughness: 0.3, metalness: 0.4, emissive: 0x0a3a30 });
+
+  let trajectory = null;
+  let currentFrame = 0;
+  let playing = true;
+  let lastFrameTime = 0;
+  const FRAME_INTERVAL_MS = 140;
+
+  const defaultRadius = 8;
+  let radius = defaultRadius, theta = 0.9, phi = 1.1;
+
+  function updateCamera() {
+    camera.position.x = radius * Math.sin(phi) * Math.sin(theta);
+    camera.position.y = radius * Math.cos(phi);
+    camera.position.z = radius * Math.sin(phi) * Math.cos(theta);
+    camera.lookAt(0, 0, 0);
+  }
+  updateCamera();
+
+  let dragging = false, lastX = 0, lastY = 0;
+  holder.addEventListener('mousedown', (e) => { dragging = true; lastX = e.clientX; lastY = e.clientY; });
+  window.addEventListener('mouseup', () => dragging = false);
+  window.addEventListener('mousemove', (e) => {
+    if (!dragging) return;
+    const dx = e.clientX - lastX, dy = e.clientY - lastY;
+    theta -= dx * 0.006;
+    phi = Math.min(Math.max(phi - dy * 0.006, 0.2), Math.PI - 0.2);
+    lastX = e.clientX; lastY = e.clientY;
+    updateCamera();
+  });
+  holder.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    radius = Math.min(Math.max(radius + e.deltaY * 0.01, 3), 20);
+    updateCamera();
+  }, { passive: false });
+
+  function buildBox(size) {
+    if (boxHelper) scene.remove(boxHelper);
+    const geo = new THREE.BoxGeometry(size, size, size);
+    const edges = new THREE.EdgesGeometry(geo);
+    boxHelper = new THREE.LineSegments(edges, new THREE.LineBasicMaterial({ color: 0x10b981, transparent: true, opacity: 0.35 }));
+    scene.add(boxHelper);
+  }
+
+  function buildParticles(n) {
+    while (particleGroup.children.length > 0) particleGroup.remove(particleGroup.children[0]);
+    for (let i = 0; i < n; i++) {
+      particleGroup.add(new THREE.Mesh(sphereGeo, particleMat));
+    }
+  }
+
+  function applyFrame(frameIndex) {
+    if (!trajectory || !trajectory.frames || trajectory.frames.length === 0) return;
+    const frame = trajectory.frames[frameIndex % trajectory.frames.length];
+    const half = (trajectory.box_size_nm || 5.0) / 2;
+    frame.forEach((pos, i) => {
+      const mesh = particleGroup.children[i];
+      if (!mesh) return;
+      mesh.position.set(pos[0] - half, pos[1] - half, pos[2] - half);
+    });
+  }
+
+  function loadTrajectory(data) {
+    trajectory = data;
+    currentFrame = 0;
+    buildBox(data.box_size_nm || 5.0);
+    buildParticles(data.n_particles || (data.frames && data.frames[0] ? data.frames[0].length : 0));
+    applyFrame(0);
+    playing = true;
+    playPauseBtn.textContent = "Pause Stream";
+  }
+
+  playPauseBtn.addEventListener('click', () => {
+    playing = !playing;
+    playPauseBtn.textContent = playing ? "Pause Stream" : "Resume Stream";
+  });
+
+  resetViewBtn.addEventListener('click', () => {
+    radius = defaultRadius; theta = 0.9; phi = 1.1;
+    updateCamera();
+  });
+
+  window.addEventListener('resize', () => {
+    camera.aspect = holder.clientWidth / holder.clientHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(holder.clientWidth, holder.clientHeight);
+  });
+
+  function animate(time) {
+    requestAnimationFrame(animate);
+    if (trajectory && trajectory.frames && trajectory.frames.length > 0 && playing) {
+      if (time - lastFrameTime > FRAME_INTERVAL_MS) {
+        currentFrame = (currentFrame + 1) % trajectory.frames.length;
+        applyFrame(currentFrame);
+        lastFrameTime = time;
+      }
+    }
+    particleGroup.rotation.y += 0.0015;
+    renderer.render(scene, camera);
+  }
+  requestAnimationFrame(animate);
+
+  // Seed the scene so the box/particles are visible even before a live run
+  buildBox(MATSONNET_TRAJECTORY.box_size_nm || 5.0);
+  buildParticles(MATSONNET_TRAJECTORY.n_particles || 32);
+  if (MATSONNET_TRAJECTORY.frames && MATSONNET_TRAJECTORY.frames.length > 0) {
+    loadTrajectory(MATSONNET_TRAJECTORY);
+  }
+
+  return { loadTrajectory };
+})();
+
+// ---------- MATSONNET ENGINE ----------
+const MATSONNET_API_BASE = "https://matsonnet-backend.onrender.com";
+
+(function() {
+  const simTypeSelect = document.getElementById('engineSimType');
+  const simDescEl = document.getElementById('engineSimDesc');
+  const tempSlider = document.getElementById('engineTemp');
+  const tempVal = document.getElementById('engineTempVal');
+  const particlesSelect = document.getElementById('engineParticles');
+  const stepsSelect = document.getElementById('engineSteps');
+  const runBtn = document.getElementById('engineRunBtn');
+  const consoleEl = document.getElementById('engineConsole');
+
+  const SIM_DESCRIPTIONS = {
+    noble_gas: "Free-diffusing monoatomic fluid — like argon gas or liquid.",
+    diatomic_gas: "Bonded molecule pairs — bond vibration plus molecular tumbling, like N2 gas.",
+    polymer_chain: "A single flexible bead-chain — watch it fold and wiggle over time.",
+    crystal_solid: "Atoms held near fixed lattice sites — vibration in place, not diffusion."
+  };
+  simTypeSelect.addEventListener('change', () => {
+    simDescEl.textContent = SIM_DESCRIPTIONS[simTypeSelect.value] || '';
+  });
+
+  tempSlider.addEventListener('input', () => {
+    tempVal.textContent = tempSlider.value + " K";
+  });
+
+  function log(msg, color) {
+    const c = color || '#a7f3d0';
+    consoleEl.innerHTML += `<br/><span style="color:${c}">${msg}</span>`;
+    consoleEl.scrollTop = consoleEl.scrollHeight;
+  }
+
+  runBtn.addEventListener('click', async () => {
+    const simulation_type = simTypeSelect.value;
+    const n_particles = parseInt(particlesSelect.value, 10);
+    const temperature_K = parseFloat(tempSlider.value);
+    const n_steps = parseInt(stepsSelect.value, 10);
+
+    runBtn.disabled = true;
+    runBtn.textContent = "Running...";
+    log(`&gt; Requesting ${simulation_type} simulation: ${n_particles} particles, ${temperature_K}K, ${n_steps} steps`, '#fff');
+    log('Connecting to Matsonnet Engine API...');
+
+    try {
+      const res = await fetch(`${MATSONNET_API_BASE}/simulate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ simulation_type, n_particles, temperature_K, n_steps, box_size_nm: 5.0 })
+      });
+
+      if (!res.ok) {
+        const errBody = await res.json().catch(() => ({}));
+        throw new Error(errBody.detail || `Server responded ${res.status}`);
+      }
+
+      const data = await res.json();
+      log(`Simulation complete — ${data.n_frames} frames captured.`, 'var(--brand-secondary)');
+      log(`Final potential energy: ${data.final_energy_kj_mol.toFixed(4)} kJ/mol`, 'var(--brand-secondary)');
+      log('Loading result into Visualizer panel below...', 'var(--accent-success)');
+
+      MatsonnetVisualizer.loadTrajectory(data);
+
+      setTimeout(() => {
+        container.scrollTo({left:document.getElementById('panel-visualizer').offsetLeft,behavior:'smooth'});
+      }, 700);
+
+    } catch (err) {
+      log(`Error: ${err.message}`, 'var(--accent-danger)');
+      log('Is the backend running and MATSONNET_API_BASE set correctly? See README.', 'var(--accent-warning)');
+    } finally {
+      runBtn.disabled = false;
+      runBtn.textContent = "Run Real Simulation";
+    }
+  });
+})();
+
+// 3D KINETIC CHAIN REACTION DYNAMICS
+(function() {
+  const holder = document.getElementById('chain3dCanvasHolder');
+  const statusText = document.getElementById('chain3dStatus');
+  const triggerBtn = document.getElementById('triggerChain3dBtn');
+  
+  const scene = new THREE.Scene();
+  const camera = new THREE.PerspectiveCamera(45, holder.clientWidth / holder.clientHeight, 0.1, 100);
+  const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+  renderer.setSize(holder.clientWidth, holder.clientHeight);
+  holder.appendChild(renderer.domElement);
+
+  const latticeGroup = new THREE.Group();
+  scene.add(latticeGroup);
+
+  const nodes = [];
+  const dim = 4; 
+  const spacing = 0.8;
+  const sphereGeo = new THREE.SphereGeometry(0.1, 16, 16);
+  
+  for(let x=0; x<dim; x++) {
+    for(let y=0; y<dim; y++) {
+      for(let z=0; z<dim; z++) {
+        const mat = new THREE.MeshBasicMaterial({ color: 0x4b5563 });
+        const mesh = new THREE.Mesh(sphereGeo, mat);
+        mesh.position.set((x - (dim-1)/2) * spacing, (y - (dim-1)/2) * spacing, (z - (dim-1)/2) * spacing);
+        latticeGroup.add(mesh);
+        
+        nodes.push({ mesh: mesh, mat: mat, active: false, activationTime: 0, origY: mesh.position.y });
+      }
+    }
+  }
+
+  camera.position.set(4, 4, 6);
+  camera.lookAt(0, 0, 0);
+
+  let waveFrontRadius = 0;
+  let runningReaction = false;
+
+  function triggerReaction() {
+    if(runningReaction) return;
+    runningReaction = true;
+    waveFrontRadius = 0;
+    statusText.textContent = "Exothermic wave propagation active!";
+    statusText.style.color = "var(--brand-secondary)";
+    
+    const startNode = nodes[Math.floor(Math.random() * nodes.length)];
+    startNode.active = true;
+    startNode.activationTime = Date.now();
+    startNode.mat.color.setHex(0x00ffcc);
+  }
+
+  holder.addEventListener('click', triggerReaction);
+  triggerBtn.addEventListener('click', triggerReaction);
+
+  function render3dChain() {
+    requestAnimationFrame(render3dChain);
+    latticeGroup.rotation.y += 0.003;
+    
+    if(runningReaction) {
+      waveFrontRadius += 0.04;
+      nodes.forEach(node => {
+        const dist = node.mesh.position.length(); 
+        if(!node.active && dist <= waveFrontRadius) {
+          node.active = true;
+          node.activationTime = Date.now();
+          node.mat.color.setHex(0xffb300); 
+        }
+
+        if(node.active) {
+          const delta = (Date.now() - node.activationTime) / 1000;
+          if(delta < 1.0) {
+            node.mesh.position.y = node.origY + Math.sin(delta * 40) * 0.12;
+          } else {
+            node.mesh.position.y = node.origY;
+            node.mat.color.setHex(0x65a30d); 
+          }
+        }
+      });
+
+      if(waveFrontRadius > 4.5) {
+        runningReaction = false;
+        statusText.textContent = "Reaction stabilization complete. Lattice relaxed.";
+        statusText.style.color = "var(--accent-success)";
+        setTimeout(() => {
+          nodes.forEach(n => { n.active = false; n.mat.color.setHex(0x4b5563); });
+        }, 2000);
+      }
+    }
+    renderer.render(scene, camera);
+  }
+  render3dChain();
+})();
+
+// INTERACTIVE ATOMIC 3D GAME ENGINE
+(function() {
+  const container = document.getElementById('game3dContainer');
+  const scoreUI = document.getElementById('game3dScore');
+  const multUI = document.getElementById('game3dMult');
+  const stateUI = document.getElementById('game3dState');
+  const resetBtn = document.getElementById('reset3dGameBtn');
+  const spawnBtn = document.getElementById('spawnUnstableBtn');
+
+  let score = 0;
+  let chainMultiplier = 1.0;
+
+  const scene = new THREE.Scene();
+  const camera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 0.1, 100);
+  const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
+  renderer.setSize(container.clientWidth, container.clientHeight);
+  renderer.setClearColor(0x010806, 1);
+  container.appendChild(renderer.domElement);
+
+  const ambientLight = new THREE.AmbientLight(0xffffff, 0.4);
+  scene.add(ambientLight);
+  const dirLight = new THREE.DirectionalLight(0x00ffcc, 0.8);
+  dirLight.position.set(5, 10, 7);
+  scene.add(dirLight);
+
+  const gameGroup = new THREE.Group();
+  scene.add(gameGroup);
+
+  let atoms = [];
+  let energyWaves = [];
+  const raycaster = new THREE.Raycaster();
+  const mouse = new THREE.Vector2();
+
+  const sphereGeo = new THREE.SphereGeometry(0.2, 16, 16);
+
+  function createGrid() {
+    while(gameGroup.children.length > 0){ 
+      gameGroup.remove(gameGroup.children[0]); 
+    }
+    atoms = [];
+    energyWaves = [];
+    chainMultiplier = 1.0;
+    multUI.textContent = "1.0x";
+    multUI.style.color = "var(--accent-success)";
+    stateUI.textContent = "Stable Matrix";
+    stateUI.style.color = "var(--accent-warning)";
+
+    const size = 3; 
+    const spacing = 1.1;
+
+    for (let x = 0; x < size; x++) {
+      for (let y = 0; y < size; y++) {
+        for (let z = 0; z < size; z++) {
+          const mat = new THREE.MeshStandardMaterial({
+            color: 0x4b5563,
+            roughness: 0.2,
+            metalness: 0.5,
+            emissive: 0x111827
+          });
+          const mesh = new THREE.Mesh(sphereGeo, mat);
+          mesh.position.set(
+            (x - (size - 1) / 2) * spacing,
+            (y - (size - 1) / 2) * spacing,
+            (z - (size - 1) / 2) * spacing
+          );
+          gameGroup.add(mesh);
+
+          atoms.push({
+            mesh: mesh,
+            material: mat,
+            state: 'stable', 
+            timer: 0,
+            baseScale: 1.0
+          });
+        }
+      }
+    }
+  }
+
+  function exciteAtom(atom, isDirectClick = false) {
+    if (atom.state === 'excited' || atom.state === 'depleted') return;
+
+    if (atom.state === 'unstable') {
+      chainMultiplier += 0.5;
+      score += Math.floor(25 * chainMultiplier);
+      multUI.textContent = chainMultiplier.toFixed(1) + "x";
+      multUI.style.color = "var(--brand-secondary)";
+    } else if (!isDirectClick) {
+      score += Math.floor(10 * chainMultiplier);
+    }
+    
+    scoreUI.textContent = score;
+    atom.state = 'excited';
+    atom.timer = Date.now();
+    atom.material.color.setHex(0x00ffcc);
+    atom.material.emissive.setHex(0x00aa88);
+
+    const waveGeo = new THREE.SphereGeometry(0.1, 24, 24);
+    const waveMat = new THREE.MeshBasicMaterial({
+      color: 0x00ffcc,
+      wireframe: true,
+      transparent: true,
+      opacity: 0.6
+    });
+    const waveMesh = new THREE.Mesh(waveGeo, waveMat);
+    waveMesh.position.copy(atom.mesh.position);
+    gameGroup.add(waveMesh);
+
+    energyWaves.push({
+      mesh: waveMesh,
+      material: waveMat,
+      radius: 0.1,
+      maxRadius: 2.2,
+      origin: atom.mesh.position.clone()
+    });
+
+    stateUI.textContent = "Cascade Chain Active!";
+    stateUI.style.color = "var(--brand-secondary)";
+  }
+
+  function spawnUnstableNode() {
+    const stables = atoms.filter(a => a.state === 'stable');
+    if (stables.length === 0) return;
+    const target = stables[Math.floor(Math.random() * stables.length)];
+    target.state = 'unstable';
+    target.material.color.setHex(0xef4444);
+    target.material.emissive.setHex(0x991b1b);
+  }
+
+  container.addEventListener('mousedown', (e) => {
+    const rect = renderer.domElement.getBoundingClientRect();
+    mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+    mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+
+    raycaster.setFromCamera(mouse, camera);
+    const intersects = raycaster.intersectObjects(gameGroup.children);
+
+    if (intersects.length > 0) {
+      const targetMesh = intersects[0].object;
+      const clickedAtom = atoms.find(a => a.mesh === targetMesh);
+      if (clickedAtom && (clickedAtom.state === 'stable' || clickedAtom.state === 'unstable')) {
+        exciteAtom(clickedAtom, true);
+      }
+    }
+  });
+
+  resetBtn.addEventListener('click', createGrid);
+  spawnBtn.addEventListener('click', spawnUnstableNode);
+
+  camera.position.set(3.5, 3.5, 5);
+  camera.lookAt(0, 0, 0);
+
+  function gameLoop() {
+    requestAnimationFrame(gameLoop);
+
+    gameGroup.rotation.y += 0.002;
+    gameGroup.rotation.x = Math.sin(Date.now() * 0.0003) * 0.2;
+
+    atoms.forEach(atom => {
+      if (atom.state === 'unstable') {
+        const pulse = 1.0 + Math.sin(Date.now() * 0.01) * 0.25;
+        atom.mesh.scale.set(pulse, pulse, pulse);
+      } else if (atom.state === 'excited') {
+        const delta = (Date.now() - atom.timer) / 1000;
+        if (delta > 0.8) {
+          atom.state = 'depleted';
+          atom.material.color.setHex(0x2d3748);
+          atom.material.emissive.setHex(0x000000);
+          atom.mesh.scale.set(0.7, 0.7, 0.7);
+        } else {
+          const s = 1.0 + Math.sin(delta * Math.PI * 2) * 0.4;
+          atom.mesh.scale.set(s, s, s);
+        }
+      }
+    });
+
+    for (let i = energyWaves.length - 1; i >= 0; i--) {
+      const wave = energyWaves[i];
+      wave.radius += 0.05;
+      wave.mesh.scale.setScalar(wave.radius * 5);
+      wave.material.opacity = 1.0 - (wave.radius / wave.maxRadius);
+
+      atoms.forEach(atom => {
+        if (atom.state === 'stable' || atom.state === 'unstable') {
+          const dist = wave.origin.distanceTo(atom.mesh.position);
+          if (Math.abs(dist - wave.radius) < 0.25) {
+            exciteAtom(atom, false);
+          }
+        }
+      });
+
+      if (wave.radius >= wave.maxRadius) {
+        gameGroup.remove(wave.mesh);
+        energyWaves.splice(i, 1);
+      }
+    }
+
+    renderer.render(scene, camera);
+  }
+
+  setInterval(() => {
+    if (Math.random() > 0.65 && atoms.filter(a => a.state === 'stable').length > 3) {
+      spawnUnstableNode();
+    }
+  }, 3000);
+
+  createGrid();
+  gameLoop();
+})();
+
+</script>
+</body>
+</html>
