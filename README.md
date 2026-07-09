@@ -22,4 +22,4 @@ Future versions may include automated validation, expanded force-field support, 
 reproducibility, cloud execution, and plugin-based extensibility.
 Citation (placeholder)
 Hasin Azwad, M. (2026). Matsonnet Studio: AI Workspace for Molecular Dynamics (Version 2.6).
-DOI: Pending.
+DOI:10.5281/zenodo.21282863
